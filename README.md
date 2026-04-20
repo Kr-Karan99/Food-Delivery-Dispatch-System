@@ -249,34 +249,3 @@ export REDIS_HOST=your-redis-host
 export KAFKA_BROKER=your-kafka-host:9092
 ```
 
-## 🔗 Related Documentation
-
-- [ARCHITECTURE.md](./ARCHITECTURE.md) - System architecture details
-- [DEVELOPMENT_GUIDE.md](./DEVELOPMENT_GUIDE.md) - Development guidelines
-- [DEPLOYMENT_CHECKLIST.md](./DEPLOYMENT_CHECKLIST.md) - Production deployment steps
-- [UNIT_TESTING_GUIDE.md](./UNIT_TESTING_GUIDE.md) - Testing best practices
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 👥 Authors
-
-- **Your Name** - Initial work and development
-
-## 📞 Support
-
-For issues, questions, or suggestions, please open an issue on GitHub or contact the development team.
-
----
-
-**Last Updated**: April 2026
-**Version**: 0.0.1-SNAPSHOT
