@@ -1,0 +1,152 @@
+version: '3.8'
+
+# =====================================================================
+# DOCKER COMPOSE — LOCAL DEVELOPMENT ENVIRONMENT
+# =====================================================================
+#
+# WHAT IS DOCKER COMPOSE?
+# A tool to run MULTIPLE Docker containers together.
+# One command (docker-compose up) → Starts ALL services below.
+# No manual installation of Postgres, Redis, Kafka needed!
+#
+# WHAT IS DOCKER?
+# Think of it as a "lightweight virtual machine" that packages an
+# application + all its dependencies in an isolated container.
+# "It works on my machine" → Docker → "It works everywhere!"
+#
+# HOW TO START EVERYTHING:
+#   docker-compose up -d    (starts in background)
+#   docker-compose down     (stops everything)
+#   docker-compose logs -f  (see logs from all services)
+#
+# =====================================================================
+
+services:
+
+  # -------------------------------------------------------
+  # POSTGRESQL — Primary Database
+  # -------------------------------------------------------
+  # Stores: Orders, Drivers, all permanent data
+  # Port 5432: default Postgres port
+  # -------------------------------------------------------
+  postgres:
+    image: postgres:15-alpine    # Alpine = smaller image size
+    container_name: food-delivery-postgres
+    environment:
+      POSTGRES_DB: food_delivery_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: root@39
+    ports:
+      - "5432:5432"              # host:container port mapping
+    volumes:
+      - postgres_data:/var/lib/postgresql/data  # Persist data across restarts
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # -------------------------------------------------------
+  # REDIS — In-Memory Cache + GEO Index + Distributed Locks
+  # -------------------------------------------------------
+  # Stores: Driver locations (GEO), locks (SET NX), availability cache
+  # Port 6379: default Redis port
+  # -------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: food-delivery-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes  # Enable persistence (AOF)
+    # appendonly yes → writes are logged → survive restart
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # -------------------------------------------------------
+  # ZOOKEEPER — Required by Kafka for coordination
+  # -------------------------------------------------------
+  # WHAT IS ZOOKEEPER? Kafka's "brain" — manages cluster metadata.
+  # Newer Kafka (2.8+) can run without Zookeeper (KRaft mode).
+  # We use it here for compatibility.
+  # -------------------------------------------------------
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    container_name: food-delivery-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+
+  # -------------------------------------------------------
+  # KAFKA — Message Queue / Event Streaming
+  # -------------------------------------------------------
+  # Handles: ORDER_CREATED, DRIVER_ASSIGNED, ORDER_CANCELLED events
+  # Port 9092: default Kafka port
+  # -------------------------------------------------------
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: food-delivery-kafka
+    depends_on:
+      - zookeeper              # Kafka needs Zookeeper running first
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1   # 1 = dev only; use 3 in prod
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # -------------------------------------------------------
+  # KAFKA UI — Visual Dashboard for Kafka
+  # -------------------------------------------------------
+  # OPTIONAL but VERY useful for debugging.
+  # See topics, messages, consumer groups in a browser.
+  # Access: http://localhost:8090
+  # -------------------------------------------------------
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: food-delivery-kafka-ui
+    depends_on:
+      - kafka
+    ports:
+      - "8090:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+
+  # -------------------------------------------------------
+  # REDIS COMMANDER — Visual Dashboard for Redis
+  # -------------------------------------------------------
+  # See all Redis keys, GEO data, locks in a browser.
+  # Access: http://localhost:8091
+  # Great for debugging: "Is driver 42's location in Redis?"
+  # -------------------------------------------------------
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: food-delivery-redis-ui
+    environment:
+      REDIS_HOSTS: local:redis:6379
+    ports:
+      - "8091:8081"
+    depends_on:
+      - redis
+
+# -------------------------------------------------------
+# NAMED VOLUMES — Data persists across container restarts
+# Without volumes: restart Postgres → all data gone!
+# -------------------------------------------------------
+volumes:
+  postgres_data:
+  redis_data:
