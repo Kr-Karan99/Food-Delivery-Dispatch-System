@@ -4,6 +4,7 @@ import com.delivery.system.dto.DriverDTO;
 import com.delivery.system.entity.Driver;
 import com.delivery.system.enums.DriverStatus;
 import com.delivery.system.repository.DriverRepository;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -113,22 +114,28 @@ public class DriverService {
         // Key:    "driver:locations" (the GEO set name)
         // Member: driverId (identifies which driver this is)
         // Score:  internally computed from lat/lng using GeoHash
+        log.info("Before redis");
         redisTemplate.opsForGeo().add(
                 driverLocationKey,
                 new Point(request.getLongitude(), request.getLatitude()),  // Note: Redis uses lng, lat!
                 String.valueOf(driverId)
         );
-
+        log.info("After redis");
         // ---- POSTGRES WRITE ----
-        driverRepository.updateDriverLocation(
-                driverId,
-                request.getLatitude(),
-                request.getLongitude(),
-                LocalDateTime.now()
-        );
+            int rowsUpdated=driverRepository.updateDriverLocation(
+                    driverId,
+                    request.getLatitude(),
+                    request.getLongitude(),
+                    LocalDateTime.now()
+            );
 
+//        if (rowsUpdated == 0) {
+//            throw new EntityNotFoundException(
+//                    "No driver found with id: " + driverId);
+//        }
         log.debug("📍 Updated location for driver {}: lat={}, lng={}",
                 driverId, request.getLatitude(), request.getLongitude());
+        log.info("saved successfully");
     }
 
     // =========================================================
