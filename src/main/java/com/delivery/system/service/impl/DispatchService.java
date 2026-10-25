@@ -290,12 +290,18 @@ public class DispatchService {
 
         // ---- ACQUIRE REDIS LOCK ----
         // SetIfAbsent = SET NX (atomic: only sets if key doesn't exist)
-        Boolean lockAcquired = redisTemplate.opsForValue().setIfAbsent(
-                lockKey,
-                "locked_by_order_" + order.getId(),
-                lockTtlSeconds,
-                TimeUnit.SECONDS
-        );
+        Boolean lockAcquired;
+        try{
+            lockAcquired = redisTemplate.opsForValue().setIfAbsent(
+                    lockKey,
+                    "locked_by_order_" + order.getId(),
+                    lockTtlSeconds,
+                    TimeUnit.SECONDS
+            );
+        } catch (Exception e) {
+            log.warn("Redis unavailable; assigning without lock, relying on @Version", e);
+            return performAssignment(order, driverId, event);
+        }
 
         if (!Boolean.TRUE.equals(lockAcquired)) {
             // Another thread already locked this driver for another order
