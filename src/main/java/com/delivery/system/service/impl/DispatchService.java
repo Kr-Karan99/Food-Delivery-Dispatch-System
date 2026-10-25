@@ -24,6 +24,7 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -65,6 +66,7 @@ public class DispatchService {
 
     private final OrderRepository orderRepository;
     private final DriverRepository driverRepository;
+    private final TransactionTemplate txTemplate;
 
     /**
      * KafkaTemplate: Our tool to SEND events to Kafka topics.
@@ -121,7 +123,8 @@ public class DispatchService {
      */
     @KafkaListener(
             topics = "${kafka.topic.order-created}",
-            groupId = "dispatch-group"
+            groupId = "dispatch-group",
+            concurrency = "3"
     )
     public void onOrderCreated(OrderCreatedEvent event) {
         log.info("📦 Received ORDER_CREATED event for orderId={}", event.getOrderId());
@@ -312,12 +315,8 @@ public class DispatchService {
         log.info("🔓 Acquired lock for driver {}. Attempting assignment to order {}.", driverId, order.getId());
 
         try {
-            return performAssignment(order, driverId, event);
+            return Boolean.TRUE.equals(txTemplate.execute(s -> performAssignment(order, driverId, event)));
         } finally {
-            // ---- ALWAYS RELEASE LOCK ----
-            // Whether assignment succeeded or failed, release the lock
-            // so other orders can try this driver
-            // (The TTL also auto-releases it, but explicit release is faster)
             releaseLock(lockKey);
         }
     }
@@ -332,7 +331,7 @@ public class DispatchService {
      *
      * Defense in depth: Redis lock (fast) + DB optimistic lock (safe)
      */
-    @Transactional
+
     private boolean performAssignment(Order order, Long driverId, OrderCreatedEvent event) {
         // Fetch fresh driver state from DB (not stale cache)
         Optional<Driver> driverOpt = driverRepository.findById(driverId);

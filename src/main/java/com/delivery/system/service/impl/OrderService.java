@@ -13,6 +13,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -108,7 +111,11 @@ public class OrderService {
                 .eventTimestamp(LocalDateTime.now())
                 .build();
 
-        kafkaTemplate.send(orderCreatedTopic, String.valueOf(savedOrder.getId()), event);
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override public void afterCommit() {
+                kafkaTemplate.send(orderCreatedTopic, String.valueOf(savedOrder.getId()), event);
+            }
+        });
         log.info("📤 Published ORDER_CREATED event for orderId={}", savedOrder.getId());
 
         /*
